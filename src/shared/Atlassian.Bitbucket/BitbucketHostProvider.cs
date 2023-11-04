@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Net;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Atlassian.Bitbucket.Cloud;
@@ -44,6 +44,11 @@ namespace Atlassian.Bitbucket
                 return false;
             }
 
+            if (input.WwwAuth.Any(x => x.Contains("realm=\"Atlassian Bitbucket\"", StringComparison.InvariantCultureIgnoreCase)))
+            {
+                return true;
+            }
+
             // Split port number and hostname from host input argument
             if (!input.TryGetHostAndPort(out string hostName, out _))
             {
@@ -79,7 +84,8 @@ namespace Atlassian.Bitbucket
             if (StringComparer.OrdinalIgnoreCase.Equals(input.Protocol, "http")
                 && BitbucketHelper.IsBitbucketOrg(input))
             {
-                throw new Exception("Unencrypted HTTP is not supported for Bitbucket.org. Ensure the repository remote URL is using HTTPS.");
+                throw new Trace2Exception(_context.Trace2,
+                    "Unencrypted HTTP is not supported for Bitbucket.org. Ensure the repository remote URL is using HTTPS.");
             }
 
             var authModes = await GetSupportedAuthenticationModesAsync(input);
@@ -145,8 +151,9 @@ namespace Atlassian.Bitbucket
                 var result = await _bitbucketAuth.GetCredentialsAsync(remoteUri, input.UserName, authModes);
                 if (result is null || result.AuthenticationMode == AuthenticationModes.None)
                 {
-                    _context.Trace.WriteLine("User cancelled credential prompt");
-                    throw new Exception("User cancelled credential prompt.");
+                    var message = "User cancelled credential prompt";
+                    _context.Trace.WriteLine(message);
+                    throw new Trace2Exception(_context.Trace2, message);
                 }
 
                 switch (result.AuthenticationMode)
@@ -176,8 +183,10 @@ namespace Atlassian.Bitbucket
                 }
                 catch (OAuth2Exception ex)
                 {
-                    _context.Trace.WriteLine("Failed to refresh existing OAuth credential using refresh token");
+                    var message = "Failed to refresh existing OAuth credential using refresh token";
+                    _context.Trace.WriteLine(message);
                     _context.Trace.WriteException(ex);
+                    _context.Trace2.WriteError(message);
 
                     // We failed to refresh the AT using the RT; log the refresh failure and fall through to restart
                     // the OAuth authentication flow
@@ -279,7 +288,7 @@ namespace Atlassian.Bitbucket
             try
             {
                 var authenticationMethods = await _restApiRegistry.Get(input).GetAuthenticationMethodsAsync();
-                
+
                 var modes = AuthenticationModes.None;
 
                 if (authenticationMethods.Contains(AuthenticationMethod.BasicAuth))
@@ -298,10 +307,14 @@ namespace Atlassian.Bitbucket
             }
             catch (Exception ex)
             {
-                _context.Trace.WriteLine($"Failed to query '{input.GetRemoteUri()}' for supported authentication schemes.");
-                _context.Trace.WriteException(ex);
+                var format = "Failed to query '{0}' for supported authentication schemes.";
+                var message = string.Format(format, input.GetRemoteUri());
 
-                _context.Terminal.WriteLine($"warning: failed to query '{input.GetRemoteUri()}' for supported authentication schemes.");
+                _context.Trace.WriteLine(message);
+                _context.Trace.WriteException(ex);
+                _context.Trace2.WriteError(message, format);
+
+                _context.Terminal.WriteLine($"warning: {message}");
 
                 // Fall-back to offering all modes so the user is never blocked from authenticating by at least one mode
                 return AuthenticationModes.All;
@@ -356,7 +369,8 @@ namespace Atlassian.Bitbucket
                 return result.Response.UserName;
             }
 
-            throw new Exception($"Failed to resolve username. HTTP: {result.StatusCode}");
+            throw new Trace2Exception(_context.Trace2,
+                $"Failed to resolve username. HTTP: {result.StatusCode}");
         }
 
         private async Task<string> ResolveBasicAuthUserNameAsync(InputArguments input, string username, string password)
@@ -367,7 +381,8 @@ namespace Atlassian.Bitbucket
                 return result.Response.UserName;
             }
 
-            throw new Exception($"Failed to resolve username. HTTP: {result.StatusCode}");
+            throw new Trace2Exception(_context.Trace2,
+                $"Failed to resolve username. HTTP: {result.StatusCode}");
         }
 
         private async Task<bool> ValidateCredentialsWork(InputArguments input, ICredential credentials, AuthenticationModes authModes)
@@ -404,8 +419,10 @@ namespace Atlassian.Bitbucket
                 }
                 catch (Exception ex)
                 {
-                    _context.Trace.WriteLine($"Failed to validate existing credentials using OAuth");
+                    var message = "Failed to validate existing credentials using OAuth";
+                    _context.Trace.WriteLine(message);
                     _context.Trace.WriteException(ex);
+                    _context.Trace2.WriteError(message);
                 }
             }
 
@@ -419,8 +436,10 @@ namespace Atlassian.Bitbucket
                 }
                 catch (Exception ex)
                 {
-                    _context.Trace.WriteLine($"Failed to validate existing credentials using Basic Auth");
+                    var message = "Failed to validate existing credentials using Basic Auth";
+                    _context.Trace.WriteLine(message);
                     _context.Trace.WriteException(ex);
+                    _context.Trace2.WriteError(message);
                     return false;
                 }
             }

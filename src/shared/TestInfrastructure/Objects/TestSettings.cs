@@ -31,6 +31,8 @@ namespace GitCredentialManager.Tests.Objects
 
         public bool IsCertificateVerificationEnabled { get; set; } = true;
 
+        public bool AutomaticallyUseClientCertificates { get; set; }
+
         public ProxyConfiguration ProxyConfiguration { get; set; }
 
         public string ParentWindowId { get; set; }
@@ -41,11 +43,16 @@ namespace GitCredentialManager.Tests.Objects
 
         public string CustomCertificateBundlePath { get; set; }
 
+        public string CustomCookieFilePath { get; set; }
+
         public TlsBackend TlsBackend { get; set; }
 
         public bool UseCustomCertificateBundleWithSchannel { get; set; }
 
         public int AutoDetectProviderTimeout { get; set; } = Constants.DefaultAutoDetectProviderTimeoutMs;
+
+        public bool UseMsAuthDefaultAccount { get; set; }
+
         public Trace2Settings GetTrace2Settings()
         {
             return new Trace2Settings()
@@ -131,7 +138,11 @@ namespace GitCredentialManager.Tests.Objects
 
         bool ISettings.IsTerminalPromptsEnabled => IsTerminalPromptsEnabled;
 
-        bool ISettings.IsGuiPromptsEnabled => IsGuiPromptsEnabled;
+        bool ISettings.IsGuiPromptsEnabled
+        {
+            get => IsGuiPromptsEnabled;
+            set => IsGuiPromptsEnabled = value;
+        }
 
         bool ISettings.IsInteractionAllowed => IsInteractionAllowed;
 
@@ -166,11 +177,17 @@ namespace GitCredentialManager.Tests.Objects
 
         string ISettings.CustomCertificateBundlePath => CustomCertificateBundlePath;
 
+        string ISettings.CustomCookieFilePath => CustomCookieFilePath;
+
         TlsBackend ISettings.TlsBackend => TlsBackend;
 
         bool ISettings.UseCustomCertificateBundleWithSchannel => UseCustomCertificateBundleWithSchannel;
 
         int ISettings.AutoDetectProviderTimeout => AutoDetectProviderTimeout;
+
+        bool ISettings.UseMsAuthDefaultAccount => UseMsAuthDefaultAccount;
+
+        bool ISettings.UseSoftwareRendering => false;
 
         #endregion
 

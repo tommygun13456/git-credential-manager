@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using GitCredentialManager;
 using GitCredentialManager.Authentication.OAuth;
 using System.Net.Http.Headers;
+using System.Linq;
 
 namespace GitLab
 {
@@ -69,6 +70,11 @@ namespace GitLab
                 return true;
             }
 
+            if (input.WwwAuth.Any(x => x.Contains("realm=\"GitLab\"")))
+            {
+                return true;
+            }
+
             return false;
         }
 
@@ -91,7 +97,8 @@ namespace GitLab
             // We should not allow unencrypted communication and should inform the user
             if (StringComparer.OrdinalIgnoreCase.Equals(input.Protocol, "http"))
             {
-                throw new Exception("Unencrypted HTTP is not supported for GitLab. Ensure the repository remote URL is using HTTPS.");
+                throw new Trace2Exception(Context.Trace2,
+                    "Unencrypted HTTP is not supported for GitHub. Ensure the repository remote URL is using HTTPS.");
             }
 
             Uri remoteUri = input.GetRemoteUri();

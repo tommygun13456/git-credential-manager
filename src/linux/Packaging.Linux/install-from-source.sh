@@ -13,15 +13,30 @@ for i in "$@"; do
         is_ci=true
         shift # Past argument=value
         ;;
+        --install-prefix=*)
+        installPrefix="${i#*=}"
+        shift # past argument=value
+        ;;
     esac
 done
+
+# If install-prefix is not passed, use default value
+if [ -z "$installPrefix" ]; then
+    installPrefix=/usr/local
+fi
+
+# Ensure install directory exists
+if [! -d "$installPrefix" ]; then
+    echo "The folder $installPrefix does not exist"
+    exit
+fi
 
 # In non-ci scenarios, advertise what we will be doing and
 # give user the option to exit.
 if [ -z $is_ci ]; then
     echo "This script will download, compile, and install Git Credential Manager to:
 
-    /usr/local/bin
+    $installPrefix/bin
 
 Git Credential Manager is licensed under the MIT License: https://aka.ms/gcm/license"
 
@@ -34,7 +49,7 @@ Git Credential Manager is licensed under the MIT License: https://aka.ms/gcm/lic
             [Nn]*)
                 exit
             ;;
-            *) 
+            *)
                 echo "Please answer yes or no."
             ;;
         esac
@@ -68,7 +83,7 @@ ensure_dotnet_installed() {
     if [ -z "$(verify_existing_dotnet_installation)" ]; then
         curl -LO https://dot.net/v1/dotnet-install.sh
         chmod +x ./dotnet-install.sh
-        bash -c "./dotnet-install.sh"
+        bash -c "./dotnet-install.sh --channel 7.0"
 
         # Since we have to run the dotnet install script with bash, dotnet isn't
         # added to the process PATH, so we manually add it here.
@@ -83,7 +98,7 @@ verify_existing_dotnet_installation() {
     sdks=$(dotnet --list-sdks | cut -c 1-3)
 
     # If we have a supported version installed, return.
-    supported_dotnet_versions="6.0"
+    supported_dotnet_versions="7.0"
     for v in $supported_dotnet_versions; do
         if [ $(echo $sdks | grep "$v") ]; then
             echo $sdks
@@ -114,6 +129,14 @@ apt_install() {
     $sudo_cmd apt install $pkg_name -y 2>/dev/null
 }
 
+print_unsupported_distro() {
+    prefix=$1
+    distro=$2
+
+    echo "$prefix: $distro is not officially supported by the GCM project."
+    echo "See https://gh.io/gcm/linux for details."
+}
+
 sudo_cmd=
 
 # If the user isn't root, we need to use `sudo` for certain commands
@@ -134,7 +157,7 @@ case "$distribution" in
         # Install dotnet packages and dependencies if needed.
         if [ -z "$(verify_existing_dotnet_installation)" ]; then
             # First try to use native feeds (Ubuntu 22.04 and later).
-            if ! apt_install dotnet6; then
+            if ! apt_install dotnet7; then
                 # If the native feeds fail, we fall back to
                 # packages.microsoft.com. We begin by adding the dotnet package
                 # repository/signing key.
@@ -150,12 +173,12 @@ case "$distribution" in
                 $sudo_cmd apt update
                 $sudo_cmd apt install apt-transport-https -y
                 $sudo_cmd apt update
-                $sudo_cmd apt install dotnet-sdk-6.0 dpkg-dev -y
+                $sudo_cmd apt install dotnet-sdk-7.0 dpkg-dev -y
             fi
         fi
     ;;
     fedora | centos | rhel)
-        $sudo_cmd dnf update -y
+        $sudo_cmd dnf upgrade -y
 
         # Install dotnet/GCM dependencies.
         install_packages dnf install "curl git krb5-libs libicu openssl-libs zlib findutils which bash"
@@ -179,6 +202,8 @@ case "$distribution" in
         ensure_dotnet_installed
     ;;
     arch)
+        print_unsupported_distro "WARNING" "$distribution"
+
         # --noconfirm required when running from container
         $sudo_cmd pacman -Syu --noconfirm
 
@@ -187,8 +212,17 @@ case "$distribution" in
 
         ensure_dotnet_installed
     ;;
+    mariner)
+        print_unsupported_distro "WARNING" "$distribution"
+        $sudo_cmd tdnf update -y
+
+        # Install dotnet/GCM dependencies.
+        install_packages tdnf install "curl git krb5-libs libicu openssl-libs zlib findutils which bash"
+
+        ensure_dotnet_installed
+    ;;
     *)
-        echo "ERROR: Unsupported Linux distribution: $distribution"
+        print_unsupported_distro "ERROR" "$distribution"
         exit
     ;;
 esac
@@ -198,7 +232,7 @@ script_path="$(cd "$(dirname "$0")" && pwd)"
 toplevel_path="${script_path%/src/linux/Packaging.Linux}"
 if [ "z$script_path" = "z$toplevel_path" ] || [ ! -f "$toplevel_path/Git-Credential-Manager.sln" ]; then
     toplevel_path="$PWD/git-credential-manager"
-    test -d "$toplevel_path" || git clone https://github.com/GitCredentialManager/git-credential-manager
+    test -d "$toplevel_path" || git clone https://github.com/git-ecosystem/git-credential-manager
 fi
 
 if [ -z "$DOTNET_ROOT" ]; then
@@ -206,5 +240,5 @@ if [ -z "$DOTNET_ROOT" ]; then
 fi
 
 cd "$toplevel_path"
-$sudo_cmd env "PATH=$PATH" $DOTNET_ROOT/dotnet build ./src/linux/Packaging.Linux/Packaging.Linux.csproj -c Release -p:InstallFromSource=true
-add_to_PATH "/usr/local/bin"
+$sudo_cmd env "PATH=$PATH" $DOTNET_ROOT/dotnet build ./src/linux/Packaging.Linux/Packaging.Linux.csproj -c Release -p:InstallFromSource=true -p:installPrefix=$installPrefix
+add_to_PATH "$installPrefix/bin"

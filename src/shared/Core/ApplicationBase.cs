@@ -1,12 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
-using System.IO.Pipes;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using GitCredentialManager.UI;
 
 namespace GitCredentialManager
 {
@@ -77,8 +75,11 @@ namespace GitCredentialManager
                 Context.Trace.WriteLine("Tracing of secrets is enabled. Trace output may contain sensitive information.");
             }
 
-            // Enable TRACE2 tracing
-            Context.Trace2.Start(Context.Streams.Error, Context.FileSystem, Context.ApplicationPath);
+            // Set software rendering if defined in settings
+            if (Context.Settings.UseSoftwareRendering)
+            {
+                AvaloniaUi.Initialize(win32SoftwareRendering: true);
+            }
 
             return RunInternalAsync(args);
         }
